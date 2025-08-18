@@ -32,4 +32,4 @@
 - 예외 처리는 `GlobalExceptionHandler` 클래스에서 통합 관리
 
 
-- [🗂 버전 관리 정책](./docs/VERSIONING.md)
+- [🗂 버전 관리 정책](./VERSIONING.md)
