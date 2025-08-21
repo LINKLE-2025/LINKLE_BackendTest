@@ -56,7 +56,7 @@ Spring Boot와 React를 기반으로, 백엔드-프론트엔드-데이터베이�
 | DB         | MariaDB                                   |
 | 인증       | JWT                                       |
 | 배포       | Podman, Red Hat Quay                      |
-| 기타       | TTS API, Toss Payments                    |
+| 기타       | TTS API, Toss Payments!                   |
 
 ---
 
