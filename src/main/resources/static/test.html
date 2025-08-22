@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Spring Boot Test Page</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+        .wrap { display: grid; grid-template-columns: 1fr 340px; height: 100dvh; }
+        .sidebar { border-left:1px solid #e5e7eb; padding:16px; overflow:auto; }
+        .controls { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+        .badge { display:inline-block; padding:2px 8px; border:1px solid #d1d5db; border-radius:999px; font-size:12px; }
+        .item { border:1px solid #e5e7eb; border-radius:10px; padding:10px; margin-bottom:10px; box-shadow:0 2px 8px rgba(0,0,0,.05); cursor:pointer; }
+        .muted { color:#6b7280; font-size:12px; }
+        #map { width: 100%; height: 100%; }
+        #markerForm {
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background: #fff; border-top: 2px solid #ccc; padding: 16px;
+            display: none; z-index: 1000;
+        }
+        #markerForm input, #markerForm select { margin-right: 8px; padding: 6px; }
+        #markerForm button { padding: 6px 12px; }
+        #markerForm textarea { width: 100%; padding: 6px; margin-top: 8px; }
+        .mode-btn {
+            margin-left: auto; padding: 6px 10px;
+            border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+            cursor: pointer; font-size: 12px;
+        }
+        .mode-btn.active {
+            border-color: #16a34a; color: #16a34a; font-weight: 600;
+        }
+    </style>
+    <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=bc33a8c71e1511a6319771ff29cdd526&libraries=services"></script>
+</head>
+<body>
+<div class="wrap">
+    <div id="map"></div>
+    <aside class="sidebar">
+        <div class="controls">
+            <span class="badge">반경(m)</span>
+            <input id="radiusRange" type="range" min="50" max="1000" value="50" step="50" />
+            <span id="radiusValue">50</span>
+
+            <!-- 임시마커 토글 버튼 -->
+            <button id="toggleAddModeBtn" class="mode-btn">임시마커 모드 OFF</button>
+        </div>
+        <div id="status" class="muted">지도를 클릭하면 해당 지점 주변의 음식점을 보여줍니다.</div>
+        <div id="results"></div>
+    </aside>
+</div>
+
+<!-- 마커 정보 입력 폼 -->
+<div id="markerForm">
+    <h4>마커 정보 입력</h4>
+    <input type="text" id="markerName" placeholder="이름">
+    <input type="text" id="markerAddr" placeholder="주소">
+    <select id="markerCategory">
+        <option value="food">식사</option>
+        <option value="exercise">운동</option>
+        <option value="play">놀이</option>
+        <option value="culture">문화</option>
+    </select>
+    <textarea id="markerDesc" placeholder="설명"></textarea>
+    <button id="saveMarkerBtn">저장</button>
+    <button id="cancelMarkerBtn">취소</button>
+</div>
+
+<script>
+    (() => {
+        let map, marker, infoWindow, places, lastClicked;
+        const resultsEl = document.getElementById('results');
+        const statusEl = document.getElementById('status');
+        const radiusEl = document.getElementById('radiusRange');
+        const radiusVal = document.getElementById('radiusValue');
+
+        const markerForm = document.getElementById('markerForm');
+        const markerName = document.getElementById('markerName');
+        const markerAddr = document.getElementById('markerAddr');
+        const markerCategory = document.getElementById('markerCategory');
+        const markerDesc = document.getElementById('markerDesc');
+        const saveBtn = document.getElementById('saveMarkerBtn');
+        const cancelBtn = document.getElementById('cancelMarkerBtn');
+
+        const toggleBtn = document.getElementById('toggleAddModeBtn');
+
+        const fixedMarkers = [];
+        let addMode = false; // 임시 마커 추가 모드
+
+        radiusEl.addEventListener('input', () => radiusVal.textContent = radiusEl.value);
+
+        function updateAddModeUI() {
+            toggleBtn.textContent = addMode ? '임시마커 모드 ON' : '임시마커 모드 OFF';
+            toggleBtn.classList.toggle('active', addMode);
+        }
+
+        function clearTempMarker() {
+            if (marker) {
+                marker.setMap(null);
+                marker = null;
+            }
+            markerForm.style.display = 'none';
+            if (infoWindow) infoWindow.close();
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            addMode = !addMode;
+            updateAddModeUI();
+            if (!addMode) {
+                // 모드 끄면 임시 마커/폼/인포윈도우 정리
+                clearTempMarker();
+            }
+        });
+
+        function initMap(lat, lng) {
+            const container = document.getElementById('map');
+            map = new kakao.maps.Map(container, { center: new kakao.maps.LatLng(lat, lng), level: 3 });
+            places = new kakao.maps.services.Places();
+            infoWindow = new kakao.maps.InfoWindow({ removable: true, disableAutoPan: true });
+
+            kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+                const latlng = mouseEvent.latLng;
+                const scrollY = window.scrollY;
+
+                // 음식점 검색은 항상 수행
+                searchPlaces(latlng);
+
+                // 임시 마커는 addMode가 켜져 있을 때만 생성/이동
+                if (addMode) {
+                    placeOrMoveMarker(latlng, scrollY, null);
+                    lastClicked = latlng;
+                }
+            });
+        }
+
+        function searchPlaces(latlng) {
+            const radius = parseInt(radiusEl.value);
+            places.categorySearch('FD6', placesSearchCB, {
+                location: latlng,
+                radius: radius,
+                sort: kakao.maps.services.SortBy.DISTANCE
+            });
+        }
+
+        function placesSearchCB(data, status, pagination) {
+            if (status === kakao.maps.services.Status.OK) {
+                resultsEl.innerHTML = '';
+                data.forEach(place => {
+                    const item = document.createElement('div');
+                    item.className = 'item';
+                    item.innerHTML = `<strong>${place.place_name}</strong><br><span class="muted">${place.address_name} (${place.distance}m)</span>`;
+                    item.onclick = () => {
+                        const pos = new kakao.maps.LatLng(place.y, place.x);
+                        const scrollY = window.scrollY;
+                        map.panTo(pos);
+                        // 리스트는 항상 임시 마커 생성
+                        placeOrMoveMarker(pos, scrollY, place);
+                    };
+                    resultsEl.appendChild(item);
+                });
+                statusEl.textContent = `${data.length}개의 음식점을 찾았습니다.`;
+            } else {
+                statusEl.textContent = '검색 결과가 없습니다.';
+                resultsEl.innerHTML = '';
+            }
+        }
+
+        function placeOrMoveMarker(latlng, scrollY, place) {
+            if (!marker) marker = new kakao.maps.Marker({ position: latlng, map });
+            else marker.setPosition(latlng);
+
+            map.panTo(latlng);
+
+            const content = `<button id="confirmBtn" style="padding:2px 6px;">마커 확정</button>`;
+            infoWindow.setContent(content);
+            infoWindow.open(map, marker);
+
+            setTimeout(() => {
+                const btn = document.getElementById('confirmBtn');
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        if (place) {
+                            // 리스트에서 클릭된 경우: place 정보 사용
+                            markerAddr.value = place.address_name;
+                            markerName.value = place.place_name;
+                            markerDesc.value = '';
+                        } else {
+                            // 지도 클릭된 경우: reverseGeocode 사용
+                            reverseGeocode(latlng, addr => {
+                                markerAddr.value = addr;
+                                markerName.value = '';
+                                markerDesc.value = '';
+                            });
+                        }
+                        markerForm.style.display = 'block';
+                    });
+                    window.scrollTo(0, scrollY);
+                }
+            }, 0);
+        }
+
+        function reverseGeocode(latlng, callback){
+            const geocoder = new kakao.maps.services.Geocoder();
+            geocoder.coord2Address(latlng.getLng(), latlng.getLat(), function(result, status){
+                if(status === kakao.maps.services.Status.OK){
+                    const roadAddr = result[0].road_address;
+                    const addr = roadAddr ? roadAddr.address_name : result[0].address.address_name;
+                    callback(addr);
+                } else callback('주소 정보 없음');
+            });
+        }
+
+        saveBtn.addEventListener('click', ()=>{
+            if (!marker) {
+                alert('임시 마커가 없습니다.');
+                return;
+            }
+
+            const category = markerCategory.value;
+            let imageUrl;
+            let imageSize = new kakao.maps.Size(35, 35);
+
+            switch(category) {
+                case 'food':
+                    imageUrl = 'https://cdn-icons-png.flaticon.com/512/3075/3075977.png';
+                    break;
+                case 'exercise':
+                    imageUrl = 'https://cdn-icons-png.flaticon.com/512/5252/5252646.png';
+                    break;
+                case 'play':
+                    imageUrl = 'https://cdn-icons-png.flaticon.com/512/1126/1126607.png';
+                    break;
+                case 'culture':
+                    imageUrl = 'https://cdn-icons-png.flaticon.com/512/412/412836.png';
+                    break;
+                default:
+                    imageUrl = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png';
+            }
+
+            const markerImage = new kakao.maps.MarkerImage(imageUrl, imageSize);
+
+            // 저장 시점의 값 스냅샷
+            const name = markerName.value.trim();
+            const addr = markerAddr.value.trim();
+            const desc = markerDesc.value.trim();
+            const position = marker.getPosition();
+
+            // 고정 마커 생성
+            const fixed = new kakao.maps.Marker({
+                position: position,
+                map: map,
+                title: name,
+                image: markerImage
+            });
+
+            // 클릭 시 스냅샷 값 사용
+            kakao.maps.event.addListener(fixed, 'click', () => {
+                const content = `<div style="padding:5px;"><strong>${name}</strong><br>${addr}<br>${desc}</div>`;
+                infoWindow.setContent(content);
+                infoWindow.open(map, fixed);
+            });
+
+            fixedMarkers.push({ marker: fixed, name, addr, desc, category });
+
+            // 임시 마커/폼 정리
+            marker.setMap(null);
+            marker = null;
+            markerForm.style.display = 'none';
+            infoWindow.close();
+        });
+
+        cancelBtn.addEventListener('click', ()=>{
+            clearTempMarker();
+        });
+
+        // 초기 상태 UI 업데이트
+        updateAddModeUI();
+
+        // 초기 위치
+        if(navigator.geolocation){
+            navigator.geolocation.getCurrentPosition(
+                    pos => initMap(pos.coords.latitude, pos.coords.longitude),
+                    () => initMap(37.5662952, 126.9779451)
+            );
+        } else initMap(37.5662952, 126.9779451);
+    })();
+</script>
+</body>
+</html>
