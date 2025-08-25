@@ -6,7 +6,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
-        .wrap { display: grid; grid-template-columns: 1fr 340px; height: 100dvh; }
+        .wrap {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            height: 100dvh;
+            transition: grid-template-columns 0.3s ease;
+        }
+        .wrap.collapsed {
+            grid-template-columns: 1fr 0;
+        }
+        .sidebar {
+            border-left: 1px solid #e5e7eb;
+            padding: 16px;
+            overflow: auto;
+            transition: opacity 0.3s ease;
+        }
+        .wrap.collapsed .sidebar {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .map-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        .map-btn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000; /* 지도보다 위에 */
+            padding: 6px 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
         .sidebar { border-left:1px solid #e5e7eb; padding:16px; overflow:auto; }
         .controls { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
         .badge { display:inline-block; padding:2px 8px; border:1px solid #d1d5db; border-radius:999px; font-size:12px; }
@@ -35,6 +75,10 @@
 <body>
 <div class="wrap">
     <div id="map"></div>
+    <button id="toggleSidebarBtn" class="mode-btn map-btn">사이드바 접기</button>
+    <button id="focusMyLocationBtn" class="mode-btn map-btn" style="top:60px;">
+        현재 위치로 이동
+    </button>
     <aside class="sidebar">
         <div class="controls">
             <span class="badge">반경(m)</span>
@@ -67,6 +111,53 @@
 
 <script>
     (() => {
+
+        const focusBtn = document.getElementById('focusMyLocationBtn');
+
+        focusBtn.addEventListener('click', () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                        pos => {
+                            const lat = pos.coords.latitude;
+                            const lng = pos.coords.longitude;
+                            const locPosition = new kakao.maps.LatLng(lat, lng);
+
+                            // 지도 중심 이동
+                            map.panTo(locPosition);
+
+                            // 원한다면 내 위치에 마커도 표시
+                            if (!myLocationMarker) {
+                                myLocationMarker = new kakao.maps.Marker({
+                                    position: locPosition,
+                                    map: map
+                                });
+                            } else {
+                                myLocationMarker.setPosition(locPosition);
+                            }
+                        },
+                        () => {
+                            alert("현재 위치를 가져올 수 없습니다.");
+                        }
+                );
+            } else {
+                alert("이 브라우저는 Geolocation을 지원하지 않습니다.");
+            }
+        });
+
+        let myLocationMarker = null;
+
+
+        const wrapEl = document.querySelector('.wrap');
+        const sidebarToggleBtn = document.getElementById('toggleSidebarBtn');
+
+        sidebarToggleBtn.addEventListener('click', () => {
+            wrapEl.classList.toggle('collapsed');
+            if (wrapEl.classList.contains('collapsed')) {
+                sidebarToggleBtn.textContent = '사이드바 열기';
+            } else {
+                sidebarToggleBtn.textContent = '사이드바 접기';
+            }
+        });
         let map, marker, infoWindow, places, lastClicked;
         const resultsEl = document.getElementById('results');
         const statusEl = document.getElementById('status');
