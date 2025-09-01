@@ -1,14 +1,33 @@
-# LINKLE_Contribute'
+# LINKLE_Contribute
+
+## 코드 스타일 가이드
+- Java: Google Java Style Guide 준수
+- 클래스명은 UpperCamelCase, 변수/메서드는 lowerCamelCase
+- 컨트롤러는 `@RestController` 또는 `@Controller`로 명확히 구분
+- 예외 처리는 `GlobalExceptionHandler` 클래스에서 통합 관리
 
 ## 기여가이드
-| 타입  | 설명 |
-|-------|------|
-| feat  | 새로운 기능 추가 |
-| fix   | 버그 수정 |
-| docs  | 문서 수정 |
-| style | 코드 포맷팅, 세미콜론 누락 등 |
+| 타입       | 설명                |
+|----------|-------------------|
+| feat     | 새로운 기능 추가         |
+| fix      | 버그 수정             |
+| docs     | 문서 수정             |
+| style    | 코드 포맷팅, 세미콜론 누락 등 |
 | refactor | 기능 변화 없는 코드 구조 변경 |
-| test  | 테스트 코드 추가/수정 |
+| test     | 테스트 코드 추가/수정      |
+
+### 양식
+```
+feat
+Added
+- 추가 사항 없음
+
+Changed
+- 변경 사항 없음
+
+Fixed
+- 수정사항 없음
+```
 
 ## 브랜치 관리
 | 브랜치      | 기능                 | 설명                                                        |
@@ -25,11 +44,6 @@
 - 본문: 변경사항 요약, 관련 이슈 (있다면), 테스트 방법 포함
 - 리뷰어 지정, 라벨 붙이기 (optional)
 
-## 코드 스타일 가이드(변경예정)
-- Java: Google Java Style Guide 준수
-- 클래스명은 UpperCamelCase, 변수/메서드는 lowerCamelCase
-- 컨트롤러는 `@RestController` 또는 `@Controller`로 명확히 구분
-- 예외 처리는 `GlobalExceptionHandler` 클래스에서 통합 관리
 
 
-- [🗂 버전 관리 정책](./VERSIONING.md)
+- [버전 관리 정책](./VERSIONING.md)
